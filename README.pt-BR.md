@@ -25,29 +25,35 @@ O projeto segue o princípio *baseline-first*: um modelo complexo só deve ser p
 | Modelagem e Simulação | Baselines SMA, modelos residuais Ridge, shrinkage adaptativo, LightGBM e XGBoost; distribuições preditivas baseadas em resíduos. |
 | Accuracy Lab | MAE, RMSE, bias, Spearman, Start/Sit, decision regret, cobertura de intervalos e bootstrap. |
 
-## Resultado reportado do v0.4.1
+## Snapshot da validação mais recente do v0.4.1
 
-O experimento arquivado contém 3.509 observações jogador-semana da temporada 2025.
+A branch de origem recebeu uma correção adicional em 18/11/2026: [`24c4f315`](https://github.com/llfaraco/yardline/commit/24c4f315be9852fa1afa584173ee5ded34cbfb0d). O resumo abaixo foi fornecido pelo responsável pelo projeto; o JSON correspondente a essa nova execução ainda não foi versionado na branch de origem.
 
-| Modelo | MAE | RMSE | Bias | Start/Sit |
-|---|---:|---:|---:|---:|
-| **Baseline SMA-5 (campeão reportado)** | **2,6249** | **3,5757** | **-0,0601** | **69,98%** |
-| Baseline SMA-3 | 2,6973 | 3,7075 | -0,0271 | 69,48% |
-| Ridge adaptativo residual | 2,6619 | 3,6520 | 0,0157 | 69,70% |
-| Ridge residual | 2,6995 | 3,6855 | 0,1553 | 69,43% |
-| LightGBM residual | 2,7468 | 3,7422 | 0,1664 | 68,75% |
+| Experimento / modelo | MAE | Spearman | Observação |
+|---|---:|---:|---|
+| **Baseline SMA-5 (campeão)** | **2,6249** | **0,5666** | Continua com o menor MAE reportado |
+| B: volume + eficiência Ridge | 2,6995 | — | Baseline residual sem contexto adicional |
+| C: contexto de lesões | 2,6967 | — | Features contextuais agora entram no vetor |
+| D: QB + linha ofensiva | 2,7167 | — | Mais contexto não reduziu o MAE |
+| G: Ridge adaptativo | 2,67 | 0,562 | Não superou o SMA-5 |
 
-O Ridge adaptativo apresenta 1,31% de melhora sobre o SMA-3 no campo de comparação arquivado, mas seu MAE continua acima do SMA-5. Portanto, o SMA-5 permanece como o modelo de menor erro absoluto nesse experimento.
+Outros diagnósticos reportados:
 
-**Integridade científica:** esses números são resultados reportados da execução local original, ainda não reproduzidos de forma independente a partir deste repositório. Os JSONs originais foram preservados em `data/experiments/`.
+- 3.509 resíduos out-of-sample coletados para a distribuição probabilística quando o campeão é o SMA-5.
+- Intervalo de MAE por cluster bootstrap reportado na validação isolada: [2,577, 2,774].
+- Métricas por perfil: grupo de pouco histórico rotulado como “rookies”, MAE 2,1466 (n=307); veteranos, MAE 2,7791 (n=1.486). No código atual, “rookie” é uma aproximação baseada em `weeks_active <= 2`, não uma identificação oficial de novato da NFL.
+- As semanas 9–11 de 2025 estão presentes (230, 225 e 247 linhas). O gap reportado de 994 observações foi atribuído a jogadores sem histórico anterior suficiente para um baseline válido, não à ausência de semanas.
+- O caminho do ensemble ponderado foi executado; o resumo recebido não informa sua métrica.
+
+Os JSONs originais de v0.3/v0.4 continuam preservados em `data/experiments/`. O artefato JSON da execução pós-correção ainda precisa ser adicionado para permitir rastreabilidade independente dos novos resultados.
 
 ## Ressalvas metodológicas importantes
 
-A revisão da migração encontrou pontos que precisam ser resolvidos antes de descrever o benchmark como uma avaliação plenamente reproduzível com treino 2018–2023, seleção 2024 e teste 2025:
+A revisão da migração e do commit mais recente encontrou pontos que precisam ser resolvidos antes de descrever o benchmark como uma avaliação plenamente reproduzível com treino 2018–2023, seleção 2024 e teste 2025:
 
 1. O pipeline constrói o dataframe histórico de treino, mas o caminho atual de ablação ajusta os modelos usando o store da temporada de seleção de 2024.
 2. A engenharia de features multi-temporada agrupava janelas móveis apenas por jogador. A migração torna o agrupamento sensível à temporada e adiciona um teste de regressão, mas a suíte completa ainda não foi executada após a migração.
-3. O JSON mais recente do v0.4.1 registra `n_residuals = 0` na saída probabilística. Portanto, não alegamos intervalos preditivos calibrados.
+3. A execução mais recente reporta 3.509 resíduos out-of-sample e uma distribuição empírica. Isso ainda não comprova intervalos calibrados por jogador: o pipeline registra a distribuição, mas não executa o avaliador de calibração; a função de forecast associa os percentis 5/95 a campos chamados P10/P90; e o cálculo rotulado CRPS continua sendo uma aproximação.
 4. Algumas rotinas dos modelos convertem features ausentes em zero. É necessário definir uma estratégia explícita de imputação, ajustada somente no treino, e indicadores de ausência.
 5. O percentual do Ridge adaptativo compara com SMA-3, não demonstra superioridade sobre SMA-5.
 
@@ -103,7 +109,7 @@ python -m yardline_intelligence.pipeline --train-seasons 2018,2019,2020,2021,202
 python -m pytest tests/ -q
 ```
 
-A entrega original reportou 12 testes aprovados antes da migração. Este repositório adiciona um teste de regressão para fronteira entre temporadas e isola a saída Parquet dos testes, mas a suíte completa ainda **não foi executada de forma independente após a migração**.
+O responsável pelo projeto reporta que os 12 testes originais passam após as correções do v0.4.1. Este repositório standalone contém 16 testes: os 12 originais e quatro testes adicionais de migração/regressão. A suíte completa ainda **precisa passar por uma execução limpa no CI**.
 
 ## Relação com a Yardline Football
 

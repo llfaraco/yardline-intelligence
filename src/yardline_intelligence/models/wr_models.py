@@ -214,10 +214,21 @@ class VolumeModel:
         X = np.array(X)
         y = np.array(y)
 
+        # Filtra outliers extremos de targets (acima do P99) para evitar que
+        # o intercept seja puxado para cima e cause superestimação sistemática.
+        p99 = np.percentile(y, 99)
+        mask = y <= p99
+        if mask.sum() < len(y) * 0.5:
+            mask = np.ones_like(y, dtype=bool)
+        X = X[mask]
+        y = y[mask]
+
         if self.kind == "ridge":
             Xc = X - X.mean(axis=0, keepdims=True)
             yc = y - y.mean()
-            A = Xc.T @ Xc + self.alpha * np.eye(Xc.shape[1])
+            # Alpha mais forte (10.0) para reduzir variância do coeficiente e
+            # evitar superestimação de targets.
+            A = Xc.T @ Xc + 10.0 * np.eye(Xc.shape[1])
             b = Xc.T @ yc
             try:
                 coef = np.linalg.solve(A, b)
@@ -316,10 +327,21 @@ class EfficiencyModel:
         X = np.array(X)
         y = np.array(y)
 
+        # Filtra outliers extremos de targets (acima do P99) para evitar que
+        # o intercept seja puxado para cima e cause superestimação sistemática.
+        p99 = np.percentile(y, 99)
+        mask = y <= p99
+        if mask.sum() < len(y) * 0.5:
+            mask = np.ones_like(y, dtype=bool)
+        X = X[mask]
+        y = y[mask]
+
         if self.kind == "ridge":
             Xc = X - X.mean(axis=0, keepdims=True)
             yc = y - y.mean()
-            A = Xc.T @ Xc + self.alpha * np.eye(Xc.shape[1])
+            # Alpha mais forte (10.0) para reduzir variância do coeficiente e
+            # evitar superestimação de targets.
+            A = Xc.T @ Xc + 10.0 * np.eye(Xc.shape[1])
             b = Xc.T @ yc
             try:
                 coef = np.linalg.solve(A, b)

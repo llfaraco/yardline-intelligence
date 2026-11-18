@@ -2,11 +2,9 @@
 
 ## Prediction target
 
-The research target is weekly wide-receiver (WR) fantasy production under Half-PPR scoring. The scoring transformation is defined in `yardline_intelligence.config.HALF_PPR` and should be recorded with every experiment.
+Weekly wide-receiver (WR) fantasy production under the Yardline Half-PPR scoring preset. The scoring transformation is defined in `yardline_intelligence.config.HALF_PPR` and should be recorded with every experiment.
 
 ## Intended temporal protocol
-
-The archived experiment metadata declares this chronological split:
 
 | Role | Seasons |
 |---|---|
@@ -14,9 +12,9 @@ The archived experiment metadata declares this chronological split:
 | Model selection | 2024 |
 | Retrospective test | 2025 |
 
-No random train/test split is used for the reported retrospective experiment. Features for a target week must be computed from information available before that week's prediction cutoff.
+The protocol is chronological, not a random split. Features for a target week must use only information available before the prediction cutoff.
 
-**Implementation caveat:** the current v0.4.1 ablation path fits candidate models from the 2024 selection store, not from the combined 2018–2023 training dataframe. The declared split and the actual fitting path are therefore not yet aligned. Do not describe the model metrics as a fully validated 2018–2023 train / 2024 select / 2025 test experiment until this is corrected and rerun.
+**Current implementation caveat:** the latest pipeline still fits candidate models using `store_select`, built from the 2024 selection dataframe. The historical `df_train` is prepared but is not passed into the candidate model `fit` calls. Therefore, the latest reported results do not yet implement the declared 2018–2023 training pool. A correct fix must make the feature store and baseline lookup season-aware and process Context Engine inputs per historical season.
 
 ## Feature families
 
@@ -26,33 +24,31 @@ No random train/test split is used for the reported retrospective experiment. Fe
 - **Offensive line and defense:** pressure allowed, sack rate, passing EPA, opponent passing EPA, passing yards allowed and explosive plays.
 - **Game script:** offensive pace, pass rate, home field, rest, market total/spread and implied points. Market data requires source and timestamp.
 
-Temporal feature engineering was updated during migration to group rolling windows by player and season when a season column is present. A regression test was added for cross-season boundary behavior. The test has not yet been executed in a clean environment.
+Contextual features are now included by `ExpandedFeatureStore.features_for()` when present in the target row. The owner reports that ablations C (injuries) and D (injuries + QB + OL) produce different results from B, confirming feature wiring. This does not establish that they improve accuracy: reported C MAE is 2.6967 and D MAE is 2.7167, both above SMA-5 at 2.6249.
 
-## Missing data
+## Missing data and athlete profiles
 
-Raw source absence and model-matrix imputation are different concepts. Some model feature-vector helpers currently coerce missing values to zero. This is a known limitation, not a claim that missing values are always preserved end-to-end. The next scientific revision should fit imputation rules on training data only and add missingness indicators.
+The model code still contains paths that coerce absent feature values to zero. The research protocol should distinguish missing information from observed zero and fit imputation rules on training data only.
+
+The current “rookies” segment uses `weeks_active <= 2`; it is a short-history proxy rather than an official rookie-season label.
 
 ## Baselines and model selection
 
-Simple moving averages are mandatory reference models. The archived v0.4 benchmark compares SMA-3 and SMA-5 with residual Ridge, residual LightGBM and adaptive Ridge.
+Simple moving averages are mandatory reference models. The latest owner-reported SMA-5 result is MAE 2.6249 and Spearman 0.5666. Adaptive Ridge is reported at MAE 2.67 / Spearman 0.562 and does not beat SMA-5. The reported injury and QB/OL ablations also do not beat SMA-5.
 
-A complex model is not promoted merely because it is more sophisticated. It must show reliable out-of-sample improvement over the strongest baseline on identical observations.
+A complex model is not promoted merely because it is more sophisticated. Comparisons must use identical observations and a declared, correctly implemented temporal training protocol.
 
-## Metrics
+## Confidence intervals
 
-- **MAE:** mean absolute forecast error, in fantasy points.
-- **RMSE:** root mean squared error.
-- **Bias:** signed average error; the implementation uses prediction minus actual.
-- **Spearman:** rank correlation between predicted and actual outcomes.
-- **Start/Sit Win Rate:** pairwise ranking accuracy as implemented in the Accuracy Lab.
-- **Decision Regret:** cost of a model-selected action relative to the evaluation comparator.
-- **P10/P90 coverage:** empirical coverage of predictive intervals.
-- **CRPS:** the current simulation implementation uses an approximation; it should not be presented as a formal CRPS implementation until replaced and validated.
+The pipeline now computes cluster-bootstrap intervals for baseline and residual model outputs. The owner reports an MAE interval of [2.577, 2.774] during isolated validation. The latest run artifact must identify the model, sample, cluster unit and confidence level for this interval to be independently interpreted.
 
 ## Probabilistic outputs
 
-The latest archived v0.4.1 experiment records `n_residuals = 0`. The probabilistic code exists, but the archived run does not establish calibrated intervals or a validated residual distribution.
+The latest run reports 3,509 out-of-sample residuals and an empirical residual distribution, including when SMA-5 is the champion. This is not yet a validated calibration result:
+- the pipeline does not invoke the calibration evaluator in the run path;
+- the forecast helper currently maps the 5th/95th residual percentiles to fields named P10/P90;
+- the CRPS-labelled metric is an interval-based approximation, not formal CRPS.
 
 ## Scientific reporting standard
 
-Preserve negative results. Do not claim an improvement unless raw out-of-sample evidence supports it. Comparisons must use identical observations and target definitions. Report sample counts, cutoffs, source checksums, model parameters, random seeds and confidence intervals where available.
+Preserve negative results. Do not claim improvement unless raw out-of-sample evidence supports it. Report sample counts, prediction cutoffs, source checksums, model parameters, confidence intervals, prediction-level outputs and the exact code revision.

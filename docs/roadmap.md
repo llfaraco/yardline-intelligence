@@ -2,24 +2,25 @@
 
 ## Phase 0 — Public research repository
 
-- [x] Create the public repository.
+- [x] Create the public repository and standalone package.
 - [x] Establish research scope and scientific reporting rules.
-- [x] Document the reported v0.4 benchmark and caveats.
-- [x] Migrate the v0.4.1 source modules into a standalone package.
-- [x] Migrate raw experiment JSON and the original report.
+- [x] Migrate the v0.4.1 source modules and experiment history.
+- [x] Integrate the 2026-11-18 source follow-up commit (CI, athlete profiles, residual pool and VolumeModel correction).
+- [x] Document owner-reported latest results and remaining caveats.
 - [x] Add dependency metadata and data preparation script.
-- [x] Add a season-boundary feature regression test.
-- [ ] Run the complete suite from a clean environment.
-- [ ] Verify a clean install and end-to-end data preparation.
+- [x] Add migration-specific package and season-boundary tests.
+- [ ] Run all 16 standalone tests in GitHub Actions.
+- [ ] Commit the latest post-fix experiment JSON and prediction-level outputs.
 
-## Phase 1 — Reproducible baseline
+## Phase 1 — Reproducible temporal baseline
 
-- [ ] Correct the model-fitting path to use the declared 2018–2023 training pool.
-- [ ] Use 2024 for model selection and keep 2025 untouched for final evaluation.
-- [ ] Validate player-week keys, Half-PPR scoring and sample counts.
-- [ ] Audit all rolling features for player-season isolation.
-- [ ] Publish prediction-level outputs for the 2025 test window.
-- [ ] Recompute MAE, RMSE, Bias and Start/Sit metrics.
+- [ ] Fit candidate models on the declared 2018–2023 training pool.
+- [ ] Use 2024 strictly for model selection.
+- [ ] Keep 2025 untouched for final evaluation.
+- [ ] Make ExpandedFeatureStore row/history and baseline lookups season-aware.
+- [ ] Process Context Engine features independently for each historical training season.
+- [ ] Validate player-season-week keys, Half-PPR scoring and sample counts.
+- [ ] Publish prediction-level outputs and recompute all headline metrics.
 
 ## Phase 2 — Context feature validation
 
@@ -28,15 +29,16 @@
 - [ ] Validate offensive line, pass rush and secondary features.
 - [ ] Validate game-script timestamps and source provenance.
 - [ ] Run controlled ablations against the same baseline and test sample.
+- [ ] Add focused tests for contextual feature inclusion and VolumeModel P99 filtering.
 
 ## Phase 3 — Adaptive and probabilistic forecasting
 
+- [ ] Confirm CI coverage includes ensemble group F and uses the exact prediction function for adaptive group G.
 - [ ] Define train-only imputation and missingness indicators.
-- [ ] Reconcile Adaptive Ridge comparison metrics.
-- [ ] Rebuild the out-of-sample residual pool.
-- [ ] Validate quantile regression and interval coverage.
+- [ ] Rebuild the out-of-sample residual pool from the corrected temporal protocol.
+- [ ] Correct the P5/P95 to P10/P90 quantile naming mismatch.
 - [ ] Replace approximate CRPS calculations with a proper scoring implementation.
-- [ ] Assess calibration and decision regret.
+- [ ] Validate calibration and decision regret on held-out observations.
 
 ## Phase 4 — Portfolio publication
 

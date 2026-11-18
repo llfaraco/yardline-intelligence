@@ -2,35 +2,34 @@
 
 ## One-line summary
 
-A temporal NFL fantasy forecasting research project that tests whether player usage and game context can improve weekly wide-receiver projections beyond simple moving-average baselines.
+A temporal NFL fantasy forecasting research project that tests whether player usage and game context improve weekly wide-receiver projections beyond moving-average baselines.
 
 ## The problem
 
-Fantasy football decisions require forecasts under uncertainty. Recent production matters, but it is not the whole story: opportunity, injuries, quarterback play, offensive-line performance, defensive matchups and game environment can all influence a weekly outcome.
+Fantasy football decisions require forecasts under uncertainty. Recent production matters, but so do opportunity, injuries, quarterback play, offensive-line performance, defensive matchups and game environment.
 
-The challenge is to turn those signals into a forecast without leaking future information or confusing model complexity with predictive value.
+The challenge is to convert those signals into a forecast without leaking future information or confusing model complexity with predictive value.
 
 ## Data science work
-
-The project brings together:
 
 - Multi-season nflverse play-by-play, snap counts, injury reports and game metadata.
 - Canonical player identity resolution through GSIS/Sleeper IDs.
 - Player-season-week data modeling and Parquet storage.
 - Temporal rolling features and contextual feature families.
 - Baseline, Ridge residual, adaptive and gradient-boosting experiments.
-- Error metrics, ranking metrics, confidence intervals and experiment records.
+- Error metrics, rank metrics, cluster-bootstrap intervals, athlete-profile diagnostics and empirical residual distributions.
+- Experiment records and source-provenance documentation.
 
-## The scientific result
+## Latest reported result
 
-The archived v0.4.1 result keeps SMA-5 as champion with MAE 2.6249. Adaptive Ridge improves over SMA-3 but does not beat SMA-5. The project treats that as a meaningful result rather than presenting the most complex model as the winner.
+The owner-reported v0.4.1 follow-up keeps SMA-5 as champion with MAE 2.6249 and Spearman 0.5666. Injury ablation C reports MAE 2.6967, QB/OL ablation D reports 2.7167, and Adaptive Ridge reports MAE 2.67 / Spearman 0.562. None beats SMA-5.
 
-The migration review also found methodological issues that must be resolved before the headline benchmark can be considered independently reproducible. Those issues are documented in [known limitations](known-limitations.md).
+The latest run also reports 3,509 out-of-sample residuals, a cluster-bootstrap MAE interval [2.577, 2.774], and profile metrics for low-history players and veterans. The corresponding new experiment JSON still needs to be committed.
+
+## Research integrity
+
+The current pipeline still fits candidate models from the 2024 selection store rather than the declared 2018–2023 training pool. The empirical residual distribution is populated, but calibrated player-level intervals are not yet established. These limitations are documented in [the migration audit](known-limitations.md) and must be resolved before presenting the benchmark as a fully reproduced temporal experiment.
 
 ## Skills demonstrated
 
 Python, data ingestion, DuckDB, Parquet, temporal data modeling, feature engineering, statistical learning, Ridge regression, LightGBM/XGBoost experimentation, time-aware validation, leakage prevention, model evaluation, error analysis and reproducible research practices.
-
-## Evidence standard
-
-Use archived numbers only as reported local results until the pipeline is corrected, tests are rerun from a clean environment and the benchmark is independently reproduced.

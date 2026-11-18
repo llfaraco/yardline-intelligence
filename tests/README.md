@@ -1,13 +1,13 @@
 # Tests
 
-The migrated source test suite covers:
+The standalone suite contains 16 test functions:
 
-- Data Foundation schema/catalog behavior and Parquet round trips.
-- Temporal Feature Store history windows and leakage boundaries.
-- WR model fitting and non-negative predictions.
-- Season-boundary isolation for vectorized temporal features.
-
-The original development handoff reported 12 passing tests before migration. This repository adds a season-boundary regression test and isolates Parquet test output under pytest's temporary directory. The full suite must be run from a clean environment before the migrated project is considered verified.
+- 12 original upstream tests, reported by the project owner as passing after the v0.4.1 source corrections.
+- 4 migration/regression tests:
+  - package version exposure;
+  - season-boundary isolation for rolling features;
+  - contextual feature propagation into `ExpandedFeatureStore.features_for()`;
+  - Spearman output from the vectorized baseline evaluator.
 
 Run:
 
@@ -15,7 +15,9 @@ Run:
 python -m pytest tests/ -q
 ```
 
-Scientific tests still required:
+The repository now includes a GitHub Actions workflow that installs the project on Python 3.12, compiles source/tests and runs the full suite on pushes and pull requests.
+
+The full 16-test suite has not yet been independently executed against this standalone branch. Scientific tests still required:
 
 - model fitting uses only the declared historical training seasons;
 - selection and test seasons are disjoint from model fitting;

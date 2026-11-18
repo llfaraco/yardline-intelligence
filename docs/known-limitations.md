@@ -1,47 +1,80 @@
 # Known limitations and migration audit
 
-This document separates implemented code from claims that still require independent verification.
+This document distinguishes implemented changes, owner-reported validation and issues still visible in the current code.
 
-## 1. Temporal split versus model fitting
+## 1. Declared temporal split versus actual model fitting
 
-The pipeline constructs a training dataframe for 2018–2023, a selection dataframe for 2024 and a test dataframe for 2025. In the current v0.4.1 ablation code, however, `ExpandedFeatureStore` is created from `df_select`, and candidate models are fitted on that store. The 2018–2023 dataframe is not passed to those model `fit` calls.
+The pipeline metadata declares 2018–2023 as the training pool, 2024 as model selection and 2025 as retrospective test. The current ablation code still constructs:
 
-**Impact:** the archived metadata describes the intended split, but the current model-fitting path does not implement that split as stated.
+- `store_select` from `df_select` (2024);
+- `store_test` from `df_test` (2025);
 
-**Required correction:** fit candidate models on the historical training pool, select hyperparameters using 2024, then evaluate once on 2025. Rebuild the feature-store API to keep each player's history season-aware during multi-season fitting. Archive prediction-level outputs and rerun the experiment.
+and calls `m.fit(store_select, ...)` for the B/C/D/E/G candidate models. The combined historical `df_train` is built and passed through feature/context preparation, but it is not the dataframe used by those candidate model `fit` calls.
 
-## 2. Multi-season rolling features
+**Impact:** the latest reported results are not evidence of the declared 2018–2023 train / 2024 select / 2025 test protocol. They reflect candidate fitting on the 2024 selection store followed by evaluation on 2025.
 
-The original vectorized feature engineering grouped by player ID only. When seasons are concatenated, rolling windows could cross season boundaries. The migration changes the grouping key to player plus season and adds `tests/test_feature_engineering.py`.
+**Required correction:** fit on the historical training pool, select only on 2024 and evaluate once on 2025. This requires season-aware row/history lookup in `ExpandedFeatureStore`, season-aware baseline construction and Context Engine processing separately for every training season. Do not simply concatenate seasons and reuse the current player/week-only history lookup.
 
-**Status:** code change and regression test added; not independently executed after migration.
+## 2. Contextual features are now wired into feature snapshots
 
-## 3. Missing-value treatment
+The latest migrated `ExpandedFeatureStore.features_for()` includes injury, QB, offensive-line/defense and game-script columns when present in the target row. The owner reports that ablations C and D now differ from B, confirming the columns are reaching the feature vector in the reported run.
 
-Some model helpers convert absent feature values to `0.0`. This can conflate missing information with an observed zero and conflicts with the project's intended missing-data policy.
+Reported results:
+- B: MAE 2.6995.
+- C (injury context): MAE 2.6967.
+- D (injury + QB + OL): MAE 2.7167.
 
-**Required correction:** use a documented imputation strategy fitted on training data only, add missingness indicators, and test the behavior with controlled fixtures.
+These results show that the contextual ablations changed predictions, but neither C nor D beat the SMA-5 champion (MAE 2.6249).
 
-## 4. Probabilistic evaluation
+## 3. Baseline rank metric
 
-The latest archived v0.4.1 JSON reports `probabilistic.n_residuals = 0`. The code contains residual-distribution and interval routines, but the archived run does not demonstrate that a usable residual pool was created.
+The vectorized baseline evaluator now computes Spearman. The latest owner-reported SMA-5 value is 0.5666. This metric is included in the latest pipeline output.
 
-The current CRPS-labelled calculations are interval-based approximations, not a validated implementation of the formal Continuous Ranked Probability Score.
+## 4. Confidence intervals
 
-**Required correction:** generate genuine out-of-sample residuals, compute proper probabilistic scores, and evaluate empirical interval coverage by season/week and projection band.
+The pipeline now calculates cluster-bootstrap MAE/RMSE intervals for baseline and several residual model groups, and the owner reports a validation interval of MAE [2.577, 2.774].
 
-## 5. Adaptive Ridge comparison label
+Code-review items still requiring attention:
+- The CI dispatch loop does not currently map ensemble group F to its prediction path, so “all models” does not include the ensemble.
+- For adaptive group G, the CI/profile/probability paths can reconstruct predictions directly from the underlying estimator and may bypass the adaptive shrinkage logic used by `evaluate_adaptive`. Verify that reported uncertainty and profile metrics use the same prediction function as the headline model metric.
+- The latest run JSON is not yet committed, so the interval cannot be independently tied to a named model and exact sample from the repository alone.
 
-The archived JSON reports Adaptive Ridge MAE 2.6619 and stores a comparison baseline MAE of 2.6973 (SMA-3), yielding the reported +1.31%. SMA-5 has MAE 2.6249 and remains better. The 1.31% value must not be described as an improvement over SMA-5.
+## 5. Probabilistic residual distribution is populated, calibration is not yet established
 
-## 6. Reproduction status
+The latest run reports 3,509 out-of-sample residuals, replacing the previous zero-residual output. When SMA-5 is champion, the pipeline now collects residuals from that baseline and stores an empirical distribution.
 
-The original development handoff reported 12 passing tests. The migration adds one season-boundary regression test and isolates Parquet test output under `tmp_path`. The complete suite has not yet been run from a clean clone of this repository.
+This is a meaningful fix, but the current pipeline does not call `evaluate_calibration()` or generate a persisted set of per-player probabilistic forecasts as part of the run. In addition:
+- `forecast_from_residuals()` maps the residual 5th and 95th percentiles to fields named P10 and P90.
+- `evaluate_calibration()` labels an interval-based approximation as CRPS; it is not the formal Continuous Ranked Probability Score.
 
-## 7. Data redistribution
+**Required correction:** define the intended quantile convention, generate player-level forecasts, evaluate coverage and proper scoring rules on held-out observations, and archive the output. Until then, describe the result as an empirical OOS residual distribution, not a calibrated probability engine.
 
-The original branch contained approximately 233 MB of raw caches, local DuckDB data, Parquet files and Python bytecode. These are not copied into this public repository. Raw datasets can be downloaded from the documented public providers; generated local files are ignored by Git. Raw experiment JSON and reports are retained.
+## 6. Athlete profile labels
+
+The pipeline defines “rookies” as players with `weeks_active <= 2` in the current feature store. This is a short-history proxy, not an official NFL rookie indicator. Use labels such as “low-history players” in external reporting unless an actual rookie-season identifier is added.
+
+Owner-reported profile metrics:
+- Low-history / “rookie” proxy: MAE 2.1466, n=307.
+- Veteran group: MAE 2.7791, n=1,486.
+
+## 7. Missing baseline observations
+
+The owner reports that 2025 weeks 9–11 are present with 230, 225 and 247 rows. The reported 994-observation gap is attributed to players without sufficient prior-game history to create a valid moving-average baseline, rather than missing weeks. Preserve this distinction in future diagnostics and expose the number of rows excluded by each filter.
+
+## 8. VolumeModel outlier handling
+
+The latest source commit adds a P99 target outlier filter and stronger Ridge regularization (alpha 10.0) in the WR volume-model fit path. This change should be covered by a focused regression test and compared against the previous version on the same training/validation sample. Do not infer that it changes the headline residual-model result unless that model path is actually used in the experiment.
+
+## 9. Test and artifact status
+
+The project owner reports all 12 original upstream tests passing after the v0.4.1 corrections. This standalone migration currently contains 16 test functions: the 12 upstream tests plus four migration/regression tests (package version, season-boundary isolation, contextual feature propagation and baseline Spearman). The full suite has not yet been independently run in this repository.
+
+The latest post-fix run JSON is also absent from the source branch tree. The checked-in v0.3/v0.4 JSONs are earlier artifacts and must not be presented as containing the new Spearman, CI, profile and residual-pool results.
 
 ## Release standard
 
-Do not describe this project as production-ready or the v0.4.1 experiment as independently reproduced until the temporal fitting path, missing-data policy, probabilistic evaluation and clean-environment test run have been addressed.
+Keep the PR in draft until:
+1. the declared temporal training split is implemented correctly;
+2. the full standalone test suite passes in CI;
+3. the latest experiment JSON and prediction-level outputs are committed;
+4. the probabilistic quantiles and calibration metrics are corrected and validated.

@@ -45,7 +45,7 @@ from yardline_intelligence.models.adaptive_model import AdaptiveResidualModel, b
 from yardline_intelligence.simulation.engine import build_residual_distribution, forecast_from_residuals, evaluate_calibration, ProbabilisticForecast
 from yardline_intelligence.temporal_feature_store.expanded_store import ExpandedFeatureStore
 from yardline_intelligence.temporal_feature_store.store import moving_average_baseline
-from yardline_intelligence.evaluation.eval_vectorized import evaluate_baseline_vectorized, evaluate_residual_vectorized
+from yardline_intelligence.evaluation.eval_vectorized import evaluate_baseline_vectorized, evaluate_residual_vectorized, precompute_sma
 from yardline_intelligence.feature_engineering.temporal import (
     add_temporal_features, VOLUME_FEATURES, AIR_EPA_FEATURES,
 )
@@ -562,14 +562,97 @@ def run(target_season: int = CURRENT_SEASON,
 
     # ------------------------------------------------------------------
     # 5. Accuracy Lab com intervalos de confiança (cluster bootstrap).
+    #    Calcula CI para TODOS os modelos válidos, não apenas o campeão.
     # ------------------------------------------------------------------
     print("\n=== 4. Accuracy Lab com Intervalos de Confiança ===")
     ci_info = {}
     champion_model_for_prob = None
     champion_feats_for_prob = None
 
+    # Calcula CI para cada modelo com predições disponíveis.
+    all_ci = {}
+    for r in results:
+        if r.ablation_group == "A":
+            # Baseline puro: reavalia com CI.
+            w = 3 if r.name == "baseline_sma_3" else 5
+            base_res = evaluate_baseline_vectorized(df_test, test_weeks_eval, window=w)
+            df_eval = df_test.copy()
+            sma = precompute_sma(df_test, window=w)
+            df_eval["sma"] = sma.values
+            df_eval = df_eval[df_eval["week"].isin(test_weeks_eval)]
+            df_eval = df_eval[df_eval["half_ppr_points"].notna()]
+            df_eval = df_eval[df_eval["sma"].notna()]
+            preds = df_eval["sma"].tolist()
+            targets = df_eval["half_ppr_points"].tolist()
+            weeks = df_eval["week"].astype(int).tolist()
+            ci_mae_lo, ci_mae_hi = bootstrap_ci(preds, targets, weeks, metric="mae", n_bootstrap=500, seed=42)
+            ci_rmse_lo, ci_rmse_hi = bootstrap_ci(preds, targets, weeks, metric="rmse", n_bootstrap=500, seed=42)
+            all_ci[r.name] = {
+                "mae_lo": ci_mae_lo, "mae_hi": ci_mae_hi,
+                "rmse_lo": ci_rmse_lo, "rmse_hi": ci_rmse_hi,
+                "n_bootstrap": 500,
+            }
+            print(f"  {r.name}: MAE CI [{ci_mae_lo:.3f}, {ci_mae_hi:.3f}] RMSE CI [{ci_rmse_lo:.3f}, {ci_rmse_hi:.3f}]")
+        else:
+            # Modelo residual/adaptativo: recalcula predições para CI.
+            model_for_ci = None
+            feats_for_ci = None
+            if r.ablation_group == "B" and "lightgbm" in r.name:
+                model_for_ci, feats_for_ci = m_lgb, feat_b
+            elif r.ablation_group == "B":
+                model_for_ci, feats_for_ci = m, feat_b
+            elif r.ablation_group == "C":
+                model_for_ci, feats_for_ci = m_c, feat_c
+            elif r.ablation_group == "D":
+                model_for_ci, feats_for_ci = m_d, feat_d
+            elif r.ablation_group == "E" and "lightgbm" in r.name:
+                model_for_ci, feats_for_ci = m_e_lgb, feat_e
+            elif r.ablation_group == "E":
+                model_for_ci, feats_for_ci = m_e, feat_e
+            elif r.ablation_group == "G":
+                model_for_ci, feats_for_ci = m_g, feat_g
+
+            if model_for_ci is not None and feats_for_ci:
+                df_eval = df_test.copy()
+                sma = df_eval.sort_values(["sleeper_id", "week"]).groupby("sleeper_id")["half_ppr_points"].transform(
+                    lambda s: s.shift(1).rolling(3, min_periods=1).mean()
+                )
+                df_eval["sma"] = sma.values
+                df_eval = df_eval[df_eval["week"].isin(test_weeks_eval)]
+                df_eval = df_eval[df_eval["half_ppr_points"].notna()]
+                df_eval = df_eval[df_eval["sma"].notna()]
+
+                X = df_eval[feats_for_ci].fillna(0).values
+                if hasattr(model_for_ci, "model") and model_for_ci.model is not None:
+                    adj = model_for_ci.model.predict(X)
+                elif hasattr(model_for_ci, "coef_") and model_for_ci.coef_ is not None:
+                    adj = model_for_ci.intercept_ + X @ model_for_ci.coef_
+                else:
+                    adj = None
+
+                if adj is not None:
+                    preds = []
+                    targets = []
+                    weeks = []
+                    for i, (_, rr) in enumerate(df_eval.iterrows()):
+                        pred = float(rr["sma"]) + float(adj[i])
+                        preds.append(pred)
+                        targets.append(float(rr["half_ppr_points"]))
+                        weeks.append(int(rr["week"]))
+
+                    ci_mae_lo, ci_mae_hi = bootstrap_ci(preds, targets, weeks, metric="mae", n_bootstrap=500, seed=42)
+                    ci_rmse_lo, ci_rmse_hi = bootstrap_ci(preds, targets, weeks, metric="rmse", n_bootstrap=500, seed=42)
+                    all_ci[r.name] = {
+                        "mae_lo": ci_mae_lo, "mae_hi": ci_mae_hi,
+                        "rmse_lo": ci_rmse_lo, "rmse_hi": ci_rmse_hi,
+                        "n_bootstrap": 500,
+                    }
+                    print(f"  {r.name}: MAE CI [{ci_mae_lo:.3f}, {ci_mae_hi:.3f}] RMSE CI [{ci_rmse_lo:.3f}, {ci_rmse_hi:.3f}]")
+
+    experiment["all_model_ci"] = all_ci
+
+    # Identifica qual modelo é o campeão para recriar predições (probabilístico).
     if champion:
-        # Identifica qual modelo é o campeão para recriar predições.
         if champion.ablation_group == "E" and "lightgbm" in champion.name:
             champion_model_for_prob = m_e_lgb
             champion_feats_for_prob = feat_e
@@ -586,46 +669,164 @@ def run(target_season: int = CURRENT_SEASON,
             champion_model_for_prob = m_g
             champion_feats_for_prob = feat_g
 
-        if champion_model_for_prob is not None and champion_feats_for_prob:
-            # Recalcula predições para CI.
-            df_eval = df_test.copy()
-            sma = df_eval.sort_values(["sleeper_id", "week"]).groupby("sleeper_id")["half_ppr_points"].transform(
-                lambda s: s.shift(1).rolling(3, min_periods=1).mean()
-            )
-            df_eval["sma"] = sma.values
-            df_eval = df_eval[df_eval["week"].isin(test_weeks_eval)]
-            df_eval = df_eval[df_eval["half_ppr_points"].notna()]
-            df_eval = df_eval[df_eval["sma"].notna()]
+    ci_info = {}
+    if champion_model_for_prob is not None and champion_feats_for_prob:
+        # Recalcula predições para CI do campeão (modelo ML).
+        df_eval = df_test.copy()
+        sma = df_eval.sort_values(["sleeper_id", "week"]).groupby("sleeper_id")["half_ppr_points"].transform(
+            lambda s: s.shift(1).rolling(3, min_periods=1).mean()
+        )
+        df_eval["sma"] = sma.values
+        df_eval = df_eval[df_eval["week"].isin(test_weeks_eval)]
+        df_eval = df_eval[df_eval["half_ppr_points"].notna()]
+        df_eval = df_eval[df_eval["sma"].notna()]
 
-            X = df_eval[champion_feats_for_prob].fillna(0).values
-            if hasattr(champion_model_for_prob, "model") and champion_model_for_prob.model is not None:
-                adj = champion_model_for_prob.model.predict(X)
-            elif hasattr(champion_model_for_prob, "coef_") and champion_model_for_prob.coef_ is not None:
-                adj = champion_model_for_prob.intercept_ + X @ champion_model_for_prob.coef_
-            else:
-                adj = None
+        X = df_eval[champion_feats_for_prob].fillna(0).values
+        if hasattr(champion_model_for_prob, "model") and champion_model_for_prob.model is not None:
+            adj = champion_model_for_prob.model.predict(X)
+        elif hasattr(champion_model_for_prob, "coef_") and champion_model_for_prob.coef_ is not None:
+            adj = champion_model_for_prob.intercept_ + X @ champion_model_for_prob.coef_
+        else:
+            adj = None
 
-            if adj is not None:
-                preds = []
-                targets = []
-                weeks = []
-                for i, (_, r) in enumerate(df_eval.iterrows()):
-                    pred = float(r["sma"]) + float(adj[i])
-                    preds.append(pred)
-                    targets.append(float(r["half_ppr_points"]))
-                    weeks.append(int(r["week"]))
+        if adj is not None:
+            preds = []
+            targets = []
+            weeks = []
+            for i, (_, r) in enumerate(df_eval.iterrows()):
+                pred = float(r["sma"]) + float(adj[i])
+                preds.append(pred)
+                targets.append(float(r["half_ppr_points"]))
+                weeks.append(int(r["week"]))
 
-                ci_mae_lo, ci_mae_hi = bootstrap_ci(preds, targets, weeks, metric="mae", n_bootstrap=500, seed=42)
-                ci_rmse_lo, ci_rmse_hi = bootstrap_ci(preds, targets, weeks, metric="rmse", n_bootstrap=500, seed=42)
-                ci_info = {
-                    "mae_lo": ci_mae_lo, "mae_hi": ci_mae_hi,
-                    "rmse_lo": ci_rmse_lo, "rmse_hi": ci_rmse_hi,
-                    "n_bootstrap": 500,
-                }
-                print(f"  Campeão {champion.name}: MAE CI [{ci_mae_lo:.3f}, {ci_mae_hi:.3f}]")
-                print(f"  Campeão {champion.name}: RMSE CI [{ci_rmse_lo:.3f}, {ci_rmse_hi:.3f}]")
+            ci_mae_lo, ci_mae_hi = bootstrap_ci(preds, targets, weeks, metric="mae", n_bootstrap=500, seed=42)
+            ci_rmse_lo, ci_rmse_hi = bootstrap_ci(preds, targets, weeks, metric="rmse", n_bootstrap=500, seed=42)
+            ci_info = {
+                "mae_lo": ci_mae_lo, "mae_hi": ci_mae_hi,
+                "rmse_lo": ci_rmse_lo, "rmse_hi": ci_rmse_hi,
+                "n_bootstrap": 500,
+            }
+            print(f"  Campeão {champion.name}: MAE CI [{ci_mae_lo:.3f}, {ci_mae_hi:.3f}]")
+            print(f"  Campeão {champion.name}: RMSE CI [{ci_rmse_lo:.3f}, {ci_rmse_hi:.3f}]")
+    elif champion and champion.ablation_group == "A":
+        # Campeão é baseline puro: CI via SMA-5.
+        w = 3 if champion.name == "baseline_sma_3" else 5
+        base_res = evaluate_baseline_vectorized(df_test, test_weeks_eval, window=w)
+        df_eval = df_test.copy()
+        sma = precompute_sma(df_test, window=w)
+        df_eval["sma"] = sma.values
+        df_eval = df_eval[df_eval["week"].isin(test_weeks_eval)]
+        df_eval = df_eval[df_eval["half_ppr_points"].notna()]
+        df_eval = df_eval[df_eval["sma"].notna()]
+        preds = df_eval["sma"].tolist()
+        targets = df_eval["half_ppr_points"].tolist()
+        weeks = df_eval["week"].astype(int).tolist()
+        ci_mae_lo, ci_mae_hi = bootstrap_ci(preds, targets, weeks, metric="mae", n_bootstrap=500, seed=42)
+        ci_rmse_lo, ci_rmse_hi = bootstrap_ci(preds, targets, weeks, metric="rmse", n_bootstrap=500, seed=42)
+        ci_info = {
+            "mae_lo": ci_mae_lo, "mae_hi": ci_mae_hi,
+            "rmse_lo": ci_rmse_lo, "rmse_hi": ci_rmse_hi,
+            "n_bootstrap": 500,
+        }
+        print(f"  Campeão {champion.name} (baseline): MAE CI [{ci_mae_lo:.3f}, {ci_mae_hi:.3f}]")
+        print(f"  Campeão {champion.name} (baseline): RMSE CI [{ci_rmse_lo:.3f}, {ci_rmse_hi:.3f}]")
 
     experiment["champion_ci"] = ci_info
+
+    # ------------------------------------------------------------------
+    # 5.5. Métricas por perfil de atleta (rookies, retornando de lesão,
+    #      troca de QB, faixas de projeção).
+    # ------------------------------------------------------------------
+    print("\n=== 4.5. Métricas por Perfil de Atleta ===")
+    profile_metrics = {}
+
+    # Determina predições/targets para métricas de perfil.
+    profile_preds = None
+    profile_targets = None
+    profile_weeks = None
+
+    if champion_model_for_prob is not None and champion_feats_for_prob:
+        df_eval = df_test.copy()
+        sma = df_eval.sort_values(["sleeper_id", "week"]).groupby("sleeper_id")["half_ppr_points"].transform(
+            lambda s: s.shift(1).rolling(3, min_periods=1).mean()
+        )
+        df_eval["sma"] = sma.values
+        df_eval = df_eval[df_eval["week"].isin(test_weeks_eval)]
+        df_eval = df_eval[df_eval["half_ppr_points"].notna()]
+        df_eval = df_eval[df_eval["sma"].notna()]
+
+        X = df_eval[champion_feats_for_prob].fillna(0).values
+        if hasattr(champion_model_for_prob, "model") and champion_model_for_prob.model is not None:
+            adj = champion_model_for_prob.model.predict(X)
+        elif hasattr(champion_model_for_prob, "coef_") and champion_model_for_prob.coef_ is not None:
+            adj = champion_model_for_prob.intercept_ + X @ champion_model_for_prob.coef_
+        else:
+            adj = None
+
+        if adj is not None:
+            preds = []
+            targets = []
+            for i, (_, r) in enumerate(df_eval.iterrows()):
+                pred = float(r["sma"]) + float(adj[i])
+                preds.append(pred)
+                targets.append(float(r["half_ppr_points"]))
+            profile_preds = preds
+            profile_targets = targets
+            profile_weeks = [int(r["week"]) for _, r in df_eval.iterrows()]
+    else:
+        # Campeão é baseline puro (SMA-5): usa predições do baseline.
+        df_eval = df_test.copy()
+        sma_5 = df_eval.sort_values(["sleeper_id", "week"]).groupby("sleeper_id")["half_ppr_points"].transform(
+            lambda s: s.shift(1).rolling(5, min_periods=1).mean()
+        )
+        df_eval["sma_5"] = sma_5.values
+        df_eval = df_eval[df_eval["week"].isin(test_weeks_eval)]
+        df_eval = df_eval[df_eval["half_ppr_points"].notna()]
+        df_eval = df_eval[df_eval["sma_5"].notna()]
+
+        preds = df_eval["sma_5"].tolist()
+        targets = df_eval["half_ppr_points"].tolist()
+        profile_preds = preds
+        profile_targets = targets
+        profile_weeks = df_eval["week"].astype(int).tolist()
+
+    if profile_preds is not None and profile_targets:
+        # Métricas por faixa de projeção (quartis do predito).
+        bands = metrics_by_projection_band(profile_preds, profile_targets, n_bands=4)
+        profile_metrics["by_projection_band"] = bands
+
+        # Métricas por semana.
+        by_week = metrics_by_week(profile_preds, profile_targets, profile_weeks)
+        profile_metrics["by_week"] = by_week
+
+        # Rookies: jogadores com weeks_active <= 2 na semana de avaliação.
+        rookie_idx = []
+        veteran_idx = []
+        for i, (_, r) in enumerate(df_eval.iterrows()):
+            feats = store_test.features_for(r["sleeper_id"], int(r["week"]))
+            wa = feats.get("weeks_active")
+            if wa is not None and wa <= 2:
+                rookie_idx.append(i)
+            else:
+                veteran_idx.append(i)
+
+        def _m(ids):
+            if not ids:
+                return {"n": 0}
+            p = [profile_preds[i] for i in ids]
+            t = [profile_targets[i] for i in ids]
+            return core_metrics(p, t)
+
+        profile_metrics["rookies"] = _m(rookie_idx)
+        profile_metrics["veteranos"] = _m(veteran_idx)
+
+        print(f"  Rookies: n={profile_metrics['rookies'].get('n')} MAE={profile_metrics['rookies'].get('mae')}")
+        print(f"  Veteranos: n={profile_metrics['veteranos'].get('n')} MAE={profile_metrics['veteranos'].get('mae')}")
+        if bands and "bands" in bands:
+            for b in bands["bands"]:
+                print(f"  Faixa {b['band']}: n={b['n']} MAE={b['mae']} pred=[{b['pred_lo']}, {b['pred_hi']}]")
+
+    experiment["profile_metrics"] = profile_metrics
 
     # ------------------------------------------------------------------
     # 6. Simulação probabilística (resíduos OOS).
