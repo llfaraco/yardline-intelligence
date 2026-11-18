@@ -1,107 +1,140 @@
 # Yardline Intelligence
 
-**NFL player performance forecasting | Data Science · Statistical Modeling · Machine Learning**
+**NFL fantasy football forecasting research | Data Science · Data Engineering · Machine Learning**
 
-Yardline Intelligence is a research project focused on forecasting weekly NFL player performance for fantasy football decision support. The project investigates whether historical production, player usage, availability, quarterback/offensive-line context, defensive matchups and game environment can improve predictions beyond simple historical baselines.
+Yardline Intelligence is an independent research project exploring weekly NFL player-performance forecasts for fantasy football. It combines public NFL datasets, temporal feature engineering, contextual signals, statistical baselines, machine-learning experiments and decision-oriented evaluation.
 
-> **Project status:** research pipeline v0.4 has been developed and evaluated locally. This repository is being established as the reproducible, public portfolio home for the project. The original implementation and experiment artifacts still need to be migrated from the isolated development workspace. Until that migration and a clean reproduction are complete, the results below are reported project results, not independently reproduced by this repository.
+> **Status:** research prototype, v0.4.1 source synchronized through 2026-11-18. Initial modeling scope: wide receivers (WR). The latest source corrections are integrated, but the declared historical train/selection/test protocol and probabilistic calibration still require further work.
+
+[Português (Brasil)](README.pt-BR.md) · [Architecture](docs/architecture.md) · [Methodology](docs/methodology.md) · [Latest results](docs/experiments/v0.4-results.md) · [Known limitations](docs/known-limitations.md)
 
 ## Research question
 
-Can temporally valid player-level and game-context features improve weekly Half-PPR fantasy-point forecasts over a simple moving-average baseline?
+Can temporally valid player-level and game-context features improve weekly Half-PPR fantasy forecasts beyond a simple recent-performance baseline?
 
-The initial modeling scope is **wide receivers (WR)** and weekly player-level forecasts. The project deliberately prioritizes honest out-of-sample evaluation over model complexity.
-
-## Reported v0.4 benchmark
-
-Retrospective evaluation on the 2025 season, as reported by the local v0.4 experiment:
-
-| Model | Observations | MAE | RMSE | Bias | Spearman | Start/Sit |
-|---|---:|---:|---:|---:|---:|---:|
-| **Baseline SMA-5** | 3,509 | **2.6249** | 3.5757 | -0.0601 | — | 69.98% |
-| Baseline SMA-3 | 3,509 | 2.6973 | 3.7075 | -0.0271 | — | 69.48% |
-| Residual Ridge | 3,509 | 2.6995 | 3.6855 | 0.1553 | 0.5524 | 69.43% |
-| Residual LightGBM | 3,509 | 2.7468 | 3.7422 | 0.1664 | 0.5354 | 68.75% |
-| **Adaptive Ridge** | 3,509 | 2.6619 | 3.6520 | 0.0157 | **0.5598** | **69.70%** |
-
-**Interpretation:** SMA-5 remains the lowest-MAE model in the reported benchmark. The adaptive Ridge model has a higher MAE (2.6619) than SMA-5 (2.6249), despite the original experiment summary labeling its comparison as “+1.31%”. That direction/percentage discrepancy must be reconciled against the raw experiment output before describing the adaptive model as an improvement. No model gain is claimed here.
-
-The reported evaluation contains 3,509 player-week observations from weeks 4–10 of the 2025 season. The experiment used a strict temporal split: training on 2018–2023, hyperparameter selection on 2024, and an untouched retrospective test on 2025.
-
-See [the v0.4 experiment report](docs/experiments/v0.4-results.md) for the detailed interpretation and caveats.
-
-## Methodological principles
-
-- **Temporal validation:** train, selection and test periods are separated chronologically.
-- **No data leakage:** features for a target week use information available before that week.
-- **Baseline first:** complex models must demonstrate out-of-sample value over SMA baselines.
-- **Missing is not zero:** unavailable values remain null/ missing and are not silently converted to zero.
-- **Traceable data:** preserve source, capture time, row counts and SHA-256 metadata where available.
-- **Canonical player identity:** use stable identifiers (GSIS/Sleeper mapping through DynastyProcess data), not name matching.
-- **Reproducibility:** retain experiment configurations, metrics, data provenance and environment details.
+The project follows a baseline-first principle: a complex model is not promoted unless it demonstrates a reliable improvement over the strongest baseline on identical held-out observations.
 
 ## Research architecture
 
-The intended pipeline is organized into six layers:
+| Layer | Responsibility |
+|---|---|
+| Data Foundation | Ingest play-by-play, snap counts, injury reports, games and canonical player IDs; preserve source metadata and SHA-256. |
+| Temporal Feature Store | Build player-week features, rolling windows and lagged snapshots. |
+| Feature Engineering | Derive usage, volume, efficiency, consistency and trend signals. |
+| Context Engine | Add injury/availability, quarterback, offensive-line/defense and game-script context. |
+| Modeling & Simulation | Compare SMA baselines, Ridge residual models, adaptive shrinkage, LightGBM and XGBoost; build empirical residual distributions. |
+| Accuracy Lab | Measure MAE, RMSE, bias, Spearman, Start/Sit pairwise accuracy, athlete profiles and cluster-bootstrap intervals. |
 
-1. **Data Foundation** — ingestion, validation, source catalog and Parquet storage.
-2. **Temporal Feature Store** — player-season-week features, rolling windows and lagged trends.
-3. **Feature Engineering** — usage, volume, efficiency, consistency and matchup signals.
-4. **Context Engine** — injuries/availability, quarterback, offensive line/pass rush/secondary and game script.
-5. **Modeling & Simulation** — baselines, residual/adaptive models, quantile estimates and predictive distributions.
-6. **Accuracy Lab** — temporal backtests, MAE/RMSE/Bias, rank correlation, Start/Sit metrics, decision regret, interval coverage and CRPS.
+## Latest v0.4.1 validation snapshot
 
-The repository structure and documentation are being established first. Source modules, tests and raw experiment artifacts will be migrated in a separate, auditable step.
+The source branch received follow-up commit [`24c4f315`](https://github.com/llfaraco/yardline/commit/24c4f315be9852fa1afa584173ee5ded34cbfb0d) on 2026-11-18. The results below are reported by the project owner. The corresponding new experiment JSON has not yet been committed to the source branch.
+
+| Experiment / model | MAE | Spearman | Notes |
+|---|---:|---:|---|
+| **SMA-5 baseline (champion)** | **2.6249** | **0.5666** | Lowest reported MAE |
+| B: volume + efficiency Ridge | 2.6995 | — | Context-free residual model |
+| C: injury context | 2.6967 | — | Context changes predictions, but does not beat SMA-5 |
+| D: injury + QB + OL | 2.7167 | — | Context changes predictions, but does not beat SMA-5 |
+| G: adaptive Ridge | 2.67 | 0.562 | Does not beat SMA-5 |
+
+Additional reported diagnostics:
+
+- **3,509 out-of-sample residuals** collected for the empirical probabilistic residual distribution when SMA-5 is champion.
+- A cluster-bootstrap MAE interval of **[2.577, 2.774]** was reported during isolated validation. The latest JSON is needed to independently identify the exact model/sample associated with this interval.
+- Low-history group labelled “rookies”: MAE 2.1466 (n=307); veteran group: MAE 2.7791 (n=1,486). In the current implementation, “rookie” is a proxy for `weeks_active <= 2`, not an official NFL rookie designation.
+- Weeks 9–11 of 2025 are present (230, 225 and 247 rows respectively). The reported 994-observation gap was attributed to players without a usable prior-game baseline, not missing weeks.
+- The weighted ensemble path was executed; no ensemble metric was included in the supplied summary.
+
+The earlier v0.3/v0.4 experiment JSONs remain preserved under `data/experiments/`. See [the latest validation record](docs/experiments/v0.4-results.md).
+
+## Important methodology caveats
+
+The pipeline metadata declares 2018–2023 as the training pool, 2024 as selection and 2025 as test. A code review of the latest source commit still finds candidate models being fitted with `store_select` (the 2024 selection dataframe), not the combined 2018–2023 training dataframe. The latest reported metrics therefore do **not** establish the declared 2018–2023 train / 2024 select / 2025 test protocol.
+
+The empirical residual pool is now populated, but calibrated player-level intervals are not yet established: the pipeline records the distribution without running its calibration evaluator, the forecast helper maps residual P5/P95 to fields named P10/P90, and the CRPS-labelled calculation remains an approximation.
+
+These limitations are documented explicitly in [the migration audit](docs/known-limitations.md).
 
 ## Data sources
 
-The local research pipeline has used authorized public datasets from the nflverse ecosystem, including play-by-play, snap counts, injury reports, schedules/games and player identifier mappings. Raw datasets are intentionally **not committed** to this repository. See [data documentation](data/README.md) for the expected local layout and provenance requirements.
+- [nflverse data](https://github.com/nflverse/nflverse-data): play-by-play, snap counts and injury reports.
+- [nflverse games data](https://github.com/nflverse/nfldata): schedules and game metadata.
+- [DynastyProcess player IDs](https://github.com/dynastyprocess/data): canonical GSIS/Sleeper identifier mapping.
 
-## Repository structure
+Raw CSV caches, local DuckDB files and generated Parquet datasets are excluded from Git. They can be rebuilt locally using the preparation script. Experiment JSON and Markdown reports are versioned.
+
+## Quick start
+
+Python 3.12 or newer is specified in the project configuration.
+
+### 1. Create an environment
+
+**Windows PowerShell**
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+**macOS / Linux**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 2. Download data and build local Parquet datasets
+
+The full 2018–2025 source set is substantial and may take time to download.
+
+```bash
+python scripts/prepare_data.py --seasons 2018,2019,2020,2021,2022,2023,2024,2025
+```
+
+### 3. Run the retrospective pipeline
+
+```bash
+python -m yardline_intelligence.pipeline --train-seasons 2018,2019,2020,2021,2022,2023 --select-season 2024 --test-season 2025
+```
+
+### 4. Run tests
+
+```bash
+python -m pytest tests/ -q
+```
+
+The project owner reports that the 12 original upstream tests pass after the v0.4.1 corrections. This standalone repository now contains 16 test functions: the 12 upstream tests plus four migration/regression tests. The complete suite still needs a clean CI run.
+
+## Repository layout
 
 ```text
 .
-├── data/                 # Local datasets; raw files are not versioned
-├── docs/                 # Architecture, methodology and experiment reports
-├── experiments/          # Reproducible experiment configurations and outputs
-├── notebooks/            # Exploratory analysis and research notebooks
-├── reports/              # Generated evaluation reports and figures
+├── data/experiments/       # Archived experiment JSON and reports
+├── docs/                   # Architecture, methodology, results and audit notes
+├── scripts/                # Data preparation and diagnostic backtests
 ├── src/yardline_intelligence/
-│   ├── data_foundation/
-│   ├── temporal_feature_store/
-│   ├── feature_engineering/
 │   ├── context_engine/
+│   ├── data_foundation/
+│   ├── evaluation/
+│   ├── feature_engineering/
 │   ├── models/
 │   ├── simulation/
-│   └── evaluation/
+│   └── temporal_feature_store/
 └── tests/
 ```
 
-## Reproducibility status
+## Next research steps
 
-The original local environment was reported as Python 3.15 with DuckDB, pandas, PyArrow, scikit-learn, LightGBM, XGBoost and pytest. Exact dependency versions, source code and experiment files must be migrated before a clean environment can reproduce the benchmark.
+1. Correct the historical train/selection/test fitting path and make the feature store season-aware.
+2. Process Context Engine features separately for every historical training season.
+3. Run the complete standalone test suite in CI and commit the latest experiment JSON.
+4. Correct probabilistic quantile labels and validate calibration with proper scoring rules.
+5. Expand beyond WR only after the evaluation protocol is stable.
 
-No claim of a fully reproducible public release is made until:
-1. source code and tests are present in this repository;
-2. dependency versions and data acquisition steps are documented;
-3. the experiment can be rerun from a clean environment;
-4. generated metrics match the committed experiment record.
+## Relationship to Yardline Football
 
-## Roadmap
+This repository is the independent research and portfolio project. The production Yardline Football application is a separate codebase. No model here should be considered production-ready or connected to live user leagues without separate integration and validation.
 
-- [ ] Migrate the v0.4 source code and test suite from the isolated development workspace.
-- [ ] Pin and document the Python environment and dependencies.
-- [ ] Add data acquisition and integrity checks.
-- [ ] Reproduce the 2018–2023 / 2024 / 2025 walk-forward experiment.
-- [ ] Reconcile the adaptive Ridge comparison percentage against raw outputs.
-- [ ] Add model diagnostics, calibration and probabilistic evaluation.
-- [ ] Publish notebooks and visual reports with clear provenance.
-- [ ] Extend the research beyond WR only after the WR evaluation protocol is stable.
-
-## Language
-
-The primary technical documentation is written in English for portfolio visibility. Portuguese documentation may be added where it improves explanation and accessibility.
-
----
-
-**Yardline Intelligence** is an independent research project. It is not an official NFL product and is not affiliated with the NFL or nflverse.
+Yardline Intelligence is not an official NFL product and is not affiliated with the NFL or nflverse.
