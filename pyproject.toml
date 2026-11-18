@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yardline-intelligence"
+version = "0.1.0"
+description = "Temporal NFL player performance forecasting research for fantasy football."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["numpy", "pandas", "duckdb", "pyarrow", "scikit-learn"]
+
+[project.optional-dependencies]
+ml = ["lightgbm", "xgboost"]
+dev = ["pytest", "ruff"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
