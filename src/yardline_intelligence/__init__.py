@@ -1,3 +1,3 @@
-"""Yardline Intelligence research package."""
+"""Yardline Intelligence: temporal NFL fantasy forecasting research."""
 
-__version__ = "0.1.0"
+__version__ = "0.4.1"

@@ -2,13 +2,11 @@
 
 ## Source provenance
 
-Each ingested source should have a manifest entry containing provider/dataset name, source URL, season, retrieval timestamp, source version, file format, schema version, row count, primary-key checks and SHA-256 checksum.
-
-The local v0.4 summary reports a source catalog with SHA-256 and capture timestamps. The public implementation should preserve that behavior during migration.
+The ingestion layer records provider/source, URL, season, retrieval timestamp, row count and SHA-256 checksum in a DuckDB source catalog. Experiment records should also include the code revision, source checksums, scoring rules, temporal cutoffs, model parameters and random seeds.
 
 ## Identity resolution
 
-Use stable player identifiers and explicit mapping tables. The reported workflow maps GSIS to Sleeper through DynastyProcess identifiers. Do not join player records by display name alone.
+Use stable player identifiers and explicit mapping tables. The research pipeline maps GSIS IDs to Sleeper IDs through the DynastyProcess player-ID table. Do not join player records by display name alone.
 
 ## Privacy and secrets
 
@@ -19,8 +17,15 @@ Use stable player identifiers and explicit mapping tables. The reported workflow
 
 ## Dataset redistribution
 
-This repository should contain code, schemas, manifests and small non-sensitive fixtures only. Do not upload full raw nflverse datasets or third-party data unless redistribution rights are clear. Link to the provider and document acquisition steps.
+This repository contains code, documentation and small experiment artifacts. Full raw nflverse CSV caches, local DuckDB databases and generated Parquet files are excluded. The data-preparation script downloads sources from their public providers. Review provider terms before redistributing data outside this workflow.
+
+## Local storage
+
+- `data/cache/`: downloaded CSV/CSV.GZ sources (ignored).
+- `data/parquet/`: player-week datasets by season (ignored).
+- `data/intelligence.duckdb`: local source catalog (ignored).
+- `data/experiments/`: versioned experiment JSON and reports (tracked).
 
 ## Reproducibility
 
-A reproducible experiment requires code revision, dependency versions, source checksums, scoring rules, temporal split, random seeds, model parameters and output metrics. A README table alone is not a reproducibility artifact.
+A reproducible experiment requires source checksums, dependency versions, code revision, scoring rules, temporal split, random seeds, model parameters and prediction-level outputs. A README table alone is not a reproducibility artifact.

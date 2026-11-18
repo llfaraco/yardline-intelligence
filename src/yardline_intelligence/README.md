@@ -1,5 +1,19 @@
-# Source package migration
+# Package
 
-The local v0.4 implementation is not yet present in this public repository. This package namespace is reserved for migration of the verified research modules.
+The `yardline_intelligence` package contains the research pipeline migrated from the original Yardline development branch.
 
-Do not replace this migration note with placeholder model implementations. Transfer the actual source files and their tests from the isolated development workspace, then validate them in a clean environment.
+- `config.py`: project paths, source URLs and Half-PPR scoring.
+- `pipeline.py`: historical experiment orchestration.
+- `data_foundation/`: source ingestion and player-week dataset construction.
+- `temporal_feature_store/`: player history and lagged feature snapshots.
+- `feature_engineering/`: vectorized temporal feature generation.
+- `context_engine/`: injury, QB, offensive line/defense and game-script features.
+- `models/`: baseline, residual, adaptive and direct WR models.
+- `simulation/`: residual distributions and interval diagnostics.
+- `evaluation/`: metrics, bootstrap confidence intervals and vectorized backtests.
+
+Run the pipeline from the repository root with:
+
+```bash
+python -m yardline_intelligence.pipeline
+```

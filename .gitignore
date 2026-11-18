@@ -1,3 +1,4 @@
+# Python environments and build artifacts
 __pycache__/
 *.py[cod]
 .venv/
@@ -10,21 +11,33 @@ dist/
 .mypy_cache/
 .coverage
 htmlcov/
+
+# Secrets and local configuration
 .env
 .env.*
 !.env.example
 *.pem
 *.key
+
+# Local data: source downloads, generated datasets and databases
 data/raw/
+data/cache/
 data/interim/
 data/processed/
 data/external/
+data/parquet/
+data/models/
+data/*.duckdb
 *.parquet
 *.duckdb
 *.db
 *.sqlite
 *.sqlite3
+
+# Generated outputs
 outputs/
 artifacts/
+
+# OS files
 .DS_Store
 Thumbs.db

@@ -2,28 +2,35 @@
 
 ## One-line summary
 
-A temporal machine-learning research pipeline that tests whether contextual NFL data improves weekly wide-receiver fantasy-point forecasts beyond simple historical baselines.
+A temporal NFL fantasy forecasting research project that tests whether player usage and game context can improve weekly wide-receiver projections beyond simple moving-average baselines.
 
 ## The problem
 
-Fantasy football decisions require forecasts under uncertainty. Recent production matters, but it is not the whole story: opportunity, injuries, quarterback play, offensive line performance, defensive matchups and game environment can all influence a weekly outcome.
+Fantasy football decisions require forecasts under uncertainty. Recent production matters, but it is not the whole story: opportunity, injuries, quarterback play, offensive-line performance, defensive matchups and game environment can all influence a weekly outcome.
 
-The challenge is to turn those signals into a forecast without leaking information from the future or confusing model complexity with predictive value.
+The challenge is to turn those signals into a forecast without leaking future information or confusing model complexity with predictive value.
 
-## The data science work
+## Data science work
 
-The reported project combines multi-season NFL play-by-play and weekly usage data, player identity resolution through stable identifiers, temporal feature engineering, contextual feature families, baseline/residual/adaptive regression models, walk-forward evaluation and decision-oriented metrics.
+The project brings together:
 
-## The scientific challenge
+- Multi-season nflverse play-by-play, snap counts, injury reports and game metadata.
+- Canonical player identity resolution through GSIS/Sleeper IDs.
+- Player-season-week data modeling and Parquet storage.
+- Temporal rolling features and contextual feature families.
+- Baseline, Ridge residual, adaptive and gradient-boosting experiments.
+- Error metrics, ranking metrics, confidence intervals and experiment records.
 
-The most important finding so far is not that a complex model won. The reported v0.4 benchmark still places SMA-5 ahead on MAE. That is a useful research result: it prevents a more complex model from being presented as better without evidence.
+## The scientific result
 
-The next task is to reproduce the reported experiment from a clean public repository and determine whether the adaptive model's comparison label is correct.
+The archived v0.4.1 result keeps SMA-5 as champion with MAE 2.6249. Adaptive Ridge improves over SMA-3 but does not beat SMA-5. The project treats that as a meaningful result rather than presenting the most complex model as the winner.
+
+The migration review also found methodological issues that must be resolved before the headline benchmark can be considered independently reproducible. Those issues are documented in [known limitations](known-limitations.md).
 
 ## Skills demonstrated
 
-Python, data engineering, temporal data modeling, feature engineering, statistical learning, regularization, LightGBM/XGBoost experimentation, time-aware validation, leakage prevention, model evaluation, error analysis and experiment documentation.
+Python, data ingestion, DuckDB, Parquet, temporal data modeling, feature engineering, statistical learning, Ridge regression, LightGBM/XGBoost experimentation, time-aware validation, leakage prevention, model evaluation, error analysis and reproducible research practices.
 
 ## Evidence standard
 
-Expand this case study with plots and claims only after source code and raw experiment artifacts have been migrated and reproduced. Distinguish reported local results from independently reproduced results.
+Use archived numbers only as reported local results until the pipeline is corrected, tests are rerun from a clean environment and the benchmark is independently reproduced.

@@ -1,15 +1,26 @@
 # Tests
 
-The public repository currently contains bootstrap tests only. The original local research suite must be migrated with the implementation.
+The migrated source test suite covers:
 
-Required scientific tests include:
+- Data Foundation schema/catalog behavior and Parquet round trips.
+- Temporal Feature Store history windows and leakage boundaries.
+- WR model fitting and non-negative predictions.
+- Season-boundary isolation for vectorized temporal features.
 
-- temporal feature generation never reads future weeks;
-- player identity joins use canonical IDs;
-- missing values remain missing unless an explicit imputation rule applies;
-- target scoring matches the Half-PPR definition;
-- train/selection/test seasons remain disjoint;
-- metric calculations match independently calculated fixtures;
-- simulation intervals and CRPS behave correctly on controlled examples.
+The original development handoff reported 12 passing tests before migration. This repository adds a season-boundary regression test and isolates Parquet test output under pytest's temporary directory. The full suite must be run from a clean environment before the migrated project is considered verified.
 
-A passing bootstrap test suite is not evidence that the scientific pipeline has been reproduced.
+Run:
+
+```bash
+python -m pytest tests/ -q
+```
+
+Scientific tests still required:
+
+- model fitting uses only the declared historical training seasons;
+- selection and test seasons are disjoint from model fitting;
+- player-season-week keys are unique and validated;
+- canonical identifier joins are used instead of player names;
+- missing-value handling does not silently turn unavailable data into observed zeroes;
+- scoring matches the documented Half-PPR rules;
+- probabilistic metrics use valid out-of-sample residuals and proper scoring rules.

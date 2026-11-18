@@ -1,39 +1,41 @@
-# Data
+# Data and local artifacts
 
-This directory documents the local data layout. Raw datasets are not stored in Git.
+Raw source files and generated datasets are intentionally excluded from Git. The repository preserves experiment JSON and Markdown reports under `data/experiments/`.
 
-## Source families reported by the local v0.4 pipeline
-
-- nflverse play-by-play;
-- weekly snap counts;
-- injury reports;
-- schedules and game metadata;
-- DynastyProcess player identifier mappings.
-
-The reported canonical player join is GSIS ↔ Sleeper through the identifier mapping table, not fuzzy matching on player names.
-
-## Suggested local layout
+## Local directory layout
 
 ```text
 data/
-├── raw/
-│   ├── nflverse/
-│   └── player_ids/
-├── interim/
-├── processed/
-│   ├── player_week/
-│   └── features/
-└── catalog/
-    └── source_manifest.json
+├── cache/          # Downloaded CSV/CSV.GZ sources (ignored)
+├── parquet/        # Player-season-week datasets (ignored)
+├── experiments/    # Versioned experiment JSON and Markdown reports
+├── models/         # Optional local model artifacts (ignored)
+└── intelligence.duckdb  # Local provenance/catalog database (ignored)
 ```
 
-Confirm exact filenames and paths against the migrated ingestion code before running a pipeline.
+## Source families
 
-## Rules
+- nflverse play-by-play.
+- nflverse snap counts.
+- nflverse injury reports.
+- nflverse game metadata.
+- DynastyProcess player identifier mapping.
 
-- Do not commit raw Parquet/CSV files or private league exports.
-- Record provider, source URL, retrieval timestamp, season, row count and SHA-256 checksum.
-- Preserve original source files and write transformations separately.
-- Keep unavailable values null; do not silently turn missing into zero.
-- Document filters, joins, deduplication and scoring transformations.
-- Review provider terms before redistributing any data.
+The current ingestion implementation stores season-scoped files in `data/cache/` and builds Parquet datasets in `data/parquet/<season>/`.
+
+## Prepare local data
+
+```bash
+python scripts/prepare_data.py --seasons 2018,2019,2020,2021,2022,2023,2024,2025
+```
+
+This downloads public source data and builds player-week Parquet files. The full set is large; run only the seasons required for your experiment when possible.
+
+## Governance
+
+- Record source URL, season, retrieval timestamp, row count and SHA-256.
+- Keep source files immutable and write transformed data separately.
+- Use GSIS/Sleeper identifier mappings rather than name-based joins.
+- Do not commit private league exports, credentials or user-level information.
+- Review provider terms before redistributing source datasets.
+- Missing source values must remain distinguishable from observed zeroes.

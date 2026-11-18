@@ -4,16 +4,21 @@
 
 - [x] Create the public repository.
 - [x] Establish research scope and scientific reporting rules.
-- [x] Document the reported v0.4 benchmark and its caveats.
-- [ ] Migrate source code, tests and raw experiment artifacts.
-- [ ] Pin dependencies and verify clean installation.
+- [x] Document the reported v0.4 benchmark and caveats.
+- [x] Migrate the v0.4.1 source modules into a standalone package.
+- [x] Migrate raw experiment JSON and the original report.
+- [x] Add dependency metadata and data preparation script.
+- [x] Add a season-boundary feature regression test.
+- [ ] Run the complete suite from a clean environment.
+- [ ] Verify a clean install and end-to-end data preparation.
 
 ## Phase 1 — Reproducible baseline
 
-- [ ] Reproduce SMA-3 and SMA-5 from source datasets.
-- [ ] Validate player-week keys and Half-PPR target calculation.
-- [ ] Add temporal leakage tests for rolling features.
-- [ ] Publish prediction-level output for the 2025 test window.
+- [ ] Correct the model-fitting path to use the declared 2018–2023 training pool.
+- [ ] Use 2024 for model selection and keep 2025 untouched for final evaluation.
+- [ ] Validate player-week keys, Half-PPR scoring and sample counts.
+- [ ] Audit all rolling features for player-season isolation.
+- [ ] Publish prediction-level outputs for the 2025 test window.
 - [ ] Recompute MAE, RMSE, Bias and Start/Sit metrics.
 
 ## Phase 2 — Context feature validation
@@ -26,16 +31,16 @@
 
 ## Phase 3 — Adaptive and probabilistic forecasting
 
-- [ ] Reconcile the Adaptive Ridge comparison label.
-- [ ] Evaluate shrinkage and confidence adaptation.
+- [ ] Define train-only imputation and missingness indicators.
+- [ ] Reconcile Adaptive Ridge comparison metrics.
+- [ ] Rebuild the out-of-sample residual pool.
 - [ ] Validate quantile regression and interval coverage.
-- [ ] Evaluate predictive distributions using CRPS.
+- [ ] Replace approximate CRPS calculations with a proper scoring implementation.
 - [ ] Assess calibration and decision regret.
 
 ## Phase 4 — Portfolio publication
 
 - [ ] Publish reproducible notebooks.
-- [ ] Add architecture and model diagrams.
 - [ ] Add model cards and experiment registry.
 - [ ] Create a concise case study for recruiters.
 - [ ] Add a demo only after outputs are reproducible.
